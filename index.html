@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>英文版EMR网页</title>
+  <link rel="stylesheet" href="./style.css">
+
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Emotion Recovery & Metabolic Rate Chart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script defer src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      padding: 16px;
+      margin: auto;
+      max-width: 960px;
+      font-size: 16px;
+    }
+
+    .input-row, .input-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    label {
+      flex: 1 1 200px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    input[type=number], select {
+      padding: 8px;
+      font-size: 1em;
+      margin-top: 4px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-right: 12px;
+    }
+
+    #barChart, #emrChart {
+      margin-top: 25px;
+      background: #fafafa;
+      border: 1px solid #ddd;
+      padding: 10px;
+      width: 100%;
+      min-height: 300px;
+      height: 60vh;
+      max-height: 90vh;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        font-size: 15px;
+        padding: 10px;
+      }
+      button {
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="input-row">
+    <label>Select Day:
+      <select id="daySelect"></select>
+    </label>
+  </div>
+
+  <div class="input-container">
+    <label>Emotion Before (0–10):
+      <input type="number" id="before" min="0" max="10" required>
+    </label>
+    <label>Emotion After (0–10):
+      <input type="number" id="after" min="0" max="10" required>
+    </label>
+    <label>Recovery Time:
+      <input type="number" id="recovery" min="0.01" required step="0.01">
+      <select id="unit">
+        <option value="minutes">Minutes</option>
+        <option value="hours" selected>Hours</option>
+        <option value="days">Days</option>
+        <option value="months">Months</option>
+      </select>
+    </label>
+  </div>
+
+  <button id="generateBar">Generate Current Emotion Recovery Chart</button>
+  <button id="generateEMR">Generate EMR Trend Chart</button>
+
+  <div id="barChart"></div>
+  <div id="emrChart"></div>
+
+  <script>
+    const daySelect = document.getElementById("daySelect");
+    for (let i = 1; i <= 21; i++) {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.text = `Day ${i}`;
+      daySelect.appendChild(opt);
+    }
+
+    const emrData = new Array(21).fill(null);
+
+    function formatUnit(value, unit) {
+      switch(unit) {
+        case 'minutes': return `${value} min`;
+        case 'hours': return `${value} h`;
+        case 'days': return `${value} d`;
+        case 'months': return `${value} m`;
+        default: return `${value}`;
+      }
+    }
+
+    document.getElementById("generateBar").addEventListener("click", () => {
+      const before = parseFloat(document.getElementById("before").value);
+      const after = parseFloat(document.getElementById("after").value);
+      const recoveryRaw = parseFloat(document.getElementById("recovery").value);
+      const unit = document.getElementById("unit").value;
+
+      if (isNaN(before) || isNaN(after) || isNaN(recoveryRaw)) {
+        alert("Please fill in all required data.");
+        return;
+      }
+
+      const recoveryHours = {
+        minutes: recoveryRaw / 60,
+        hours: recoveryRaw,
+        days: recoveryRaw * 24,
+        months: recoveryRaw * 30 * 24
+      }[unit];
+
+      const emr = (before - after) / recoveryHours;
+      const dayIndex = parseInt(daySelect.value) - 1;
+      emrData[dayIndex] = parseFloat(emr.toFixed(2));
+
+      const recoveryLabel = formatUnit(recoveryRaw, unit);
+      const blueX = {
+        minutes: 120,
+        hours: 2,
+        days: 2 / 24,
+        months: 2 / (24 * 30)
+      }[unit];
+
+      const traceBefore = {
+        x: [0.1],
+        y: [before],
+        type: "bar",
+        name: "Before",
+        marker: { color: "#de2d26" },
+        width: 0.4,
+        hoverinfo: 'y+name'
+      };
+
+      const traceAfter = {
+        x: [recoveryRaw],
+        y: [after],
+        type: "bar",
+        name: "After",
+        marker: { color: "#f1c40f" },
+        width: 0.4,
+        text: [recoveryLabel],
+        textposition: "outside",
+        hoverinfo: 'y+text+name'
+      };
+
+      const traceIdeal = {
+        x: [blueX],
+        y: [5],
+        type: "bar",
+        name: "Ideal Recovery",
+        marker: { color: "#1f77b4" },
+        width: 0.4,
+        text: [formatUnit(blueX.toFixed(2), unit)],
+        textposition: "outside",
+        opacity: 0.6,
+        hoverinfo: 'y+text+name'
+      };
+
+      const layout = {
+        xaxis: {
+          title: `Recovery Duration (${unit})`,
+          range: [0, Math.max(recoveryRaw, blueX) + 1],
+          tickvals: [0, recoveryRaw, blueX],
+          ticktext: ["0", recoveryLabel, formatUnit(blueX.toFixed(2), unit)],
+        },
+        yaxis: {
+          title: "Emotion Level (0–10)",
+          range: [0, 10],
+          dtick: 2,
+          showgrid: true
+        },
+        barmode: "group",
+        margin: { t: 20, b: 60 }
+      };
+
+      Plotly.newPlot("barChart", [traceBefore, traceAfter, traceIdeal], layout, {responsive: true});
+    });
+
+    document.getElementById("generateEMR").addEventListener("click", () => {
+      const xDays = Array.from({ length: 21 }, (_, i) => `Day ${i + 1}`);
+      const yEMRs = emrData.map(v => v !== null ? v : null);
+
+      const trace = {
+        x: xDays,
+        y: yEMRs,
+        type: "scatter",
+        mode: "lines+markers+text",
+        text: yEMRs.map(v => v !== null ? v.toFixed(2) : ""),
+        textposition: "top center",
+        line: { color: "#1f77b4" },
+        marker: { size: 8 },
+        connectgaps: false
+      };
+
+      const layout = {
+        title: "EMR Trend Chart",
+        xaxis: {
+          title: "Day",
+          tickangle: -45
+        },
+        yaxis: {
+          title: "EMR (unit/hour)",
+          range: [0, 20],
+          dtick: 5,
+          showgrid: true
+        },
+        shapes: [0,5,10,15,20].map(v => ({
+          type: 'line',
+          x0: -0.5,
+          x1: 20.5,
+          y0: v,
+          y1: v,
+          line: { color: 'rgba(0,0,0,0.2)', width:1, dash:'dot' }
+        })),
+        margin: { t: 50, b: 100 }
+      };
+
+      Plotly.newPlot("emrChart", [trace], layout, {responsive: true});
+    });
+  </script>
+</body>
+</html>
+<!-- partial -->
+  <script  src="./script.js"></script>
+
+</body>
+</html>
